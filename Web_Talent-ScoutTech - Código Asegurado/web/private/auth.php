@@ -1,5 +1,6 @@
 <?php
-session_start(); // Solo una vez, en la primera línea sin salida previa
+session_start(); // Iniciar sesión
+
 require_once dirname(__FILE__) . '/conf.php';
 
 $userId = FALSE;
@@ -15,49 +16,53 @@ function areUserAndPasswordValid($user, $password) {
     $row = $result->fetchArray();
     if ($row && password_verify($password, $row['password'])) {
         $userId = $row['userId'];
-        $_SESSION['userId'] = $userId; // Use session instead of cookie for sensitive data
         return TRUE;
     } else {
         return FALSE;
     }
 }
 
+// Generate CSRF token if not already set
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 // On login
-if (isset($_POST['username']) && isset($_POST['password'])) {
+if (isset($_POST['username'], $_POST['password'], $_POST['csrf_token']) &&
+    hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+
     $username = htmlspecialchars($_POST['username']);
     $password = htmlspecialchars($_POST['password']);
 
     if (areUserAndPasswordValid($username, $password)) {
+        session_regenerate_id(true); // Regenerate session ID to prevent fixation attacks
+        $_SESSION['userId'] = $userId;
         $_SESSION['username'] = $username;
+        header("Location: protected_page.php");
+        exit();
+    } else {
+        echo "Invalid username or password.";
     }
 }
 
 // On logout
-if (isset($_POST['Logout'])) {
-    // Destroy session
+if (isset($_POST['Logout'], $_POST['csrf_token']) &&
+    hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+
     session_unset();
     session_destroy();
-
+    setcookie(session_name(), '', time() - 3600, '/');
     header("Location: index.php");
     exit();
 }
 
-// Check user and password
-if (isset($_SESSION['username'])) {
-    if (areUserAndPasswordValid($_SESSION['username'], $_SESSION['password'])) {
-        $login_ok = TRUE;
-        $error = "";
-    } else {
-        $login_ok = FALSE;
-        $error = "Invalid user or password.<br>";
-    }
-} else {
-    $login_ok = FALSE;
-    $error = "This page requires you to be logged in.<br>";
+// Check authentication for protected pages
+if (!isset($_SESSION['userId'])) {
+    header("Location: login.php");
+    exit();
 }
-
-if ($login_ok == FALSE) {
 ?>
+
     <!doctype html>
     <html lang="es">
     <head>
