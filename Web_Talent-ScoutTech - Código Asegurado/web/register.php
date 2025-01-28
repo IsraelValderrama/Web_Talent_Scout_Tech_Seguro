@@ -1,13 +1,20 @@
 <?php
 require_once dirname(__FILE__) . '/private/conf.php';
+session_start();
+
+// Verificar si el usuario está autenticado y tiene rol de administrador
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header("Location: login.php");
+    exit;
+}
 
 # Verifica si el formulario ha sido enviado
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['username']) && isset($_POST['password'])) {
     $username = SQLite3::escapeString($_POST['username']);
-    $password = SQLite3::escapeString($_POST['password']);
+    $password = password_hash($_POST['password'], PASSWORD_DEFAULT); // Hashear la contraseña
 
     // Inserta el usuario en la base de datos
-    $query = "INSERT INTO users (username, password) VALUES ('$username', '$password')";
+    $query = "INSERT INTO users (username, password, role) VALUES ('$username', '$password', 'user')";
 
     if ($db->query($query)) {
         // Redirige después de una inserción exitosa
